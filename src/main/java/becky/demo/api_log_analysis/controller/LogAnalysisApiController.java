@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 @RestController
 public class LogAnalysisApiController implements LogAnalysisApi {
 
@@ -22,7 +25,7 @@ public class LogAnalysisApiController implements LogAnalysisApi {
     @Override
     public Mono<ResponseEntity<LogReportResponse>> getLogReport(String fileUrl, @Nullable String xTrackingId, ServerWebExchange exchange) {
 
-        // Validate fileUrl and logPatternLayout
+        // Validate fileUrl
         if (fileUrl.isBlank()) {
             throw LogsError.builder()
                     .message("Error: fileUrl is an expected parameter")
@@ -30,9 +33,18 @@ public class LogAnalysisApiController implements LogAnalysisApi {
                     .httpStatus(HttpStatus.BAD_REQUEST)
                     .build();
         }
+        // Extract path object from fileUrl and verify it's valid
+        Path filePath = Path.of(fileUrl);
+        if (!Files.exists(filePath)) {
+            throw LogsError.builder()
+                    .message("File not found: " + fileUrl)
+                    .errorCode("BAD_REQUEST")
+                    .httpStatus(HttpStatus.BAD_REQUEST)
+                    .build();
+        }
 
         // Call Service
-        return logAnalysisService.getLogReport(fileUrl)
+        return logAnalysisService.getLogReport(filePath)
                 // Format into 200 OK response
                 .map(ResponseEntity::ok)
                 // Handle any errors to return in expected format

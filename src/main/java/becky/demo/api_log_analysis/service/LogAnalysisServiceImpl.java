@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.nio.file.Path;
 import java.util.*;
 
 @Service
@@ -19,13 +20,14 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
 
     /**
      * Parse the provided file and analyse commonly appearing values into a report
-     * @param fileUrl The absolute file path to the log file to parse
+     *
+     * @param filePath The absolute file path to the log file to parse
      * @return A LogReportResponse containing the results of the analysis e.g. number of unique IP addresses, top 3 URLs, top 3 IP addresses
      */
     @Override
-    public Mono<LogReportResponse> getLogReport(String fileUrl) {
-        // Validate fileUrl again - theoretically not necessary if done in controller but public method could be called elsewhere in future
-        if (fileUrl.isBlank()) {
+    public Mono<LogReportResponse> getLogReport(Path filePath) {
+        // Validate filePath again - theoretically not necessary if done in controller but public method could be called elsewhere in future
+        if (filePath == null) {
             throw LogsError.builder()
                     .message("Error: fileUrl is an expected parameter")
                     .errorCode("BAD_REQUEST")
@@ -34,7 +36,7 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
         }
 
         // Call Resource layer to read + parse log data
-        return logFileResource.parseLogFile(fileUrl)
+        return logFileResource.parseLogFile(filePath)
                 // Iterate through log data to generate report data, formatting into expected response
                 .map(this::calculateReportValues)
                 // Handle errors gracefully
@@ -48,19 +50,23 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
      * @return A LogReportResponse object containing the calculated report values such as number of unique IP addresses, top 3 URLs, and top 3 IP addresses
      */
     /*
-        Developer Notes:
+    Developer Notes:
         Time Complexity
-            Overall: O(n log n) where n = number of log records, but typically better as m (unique IPs/URLs) is often much smaller than n
-            Parsing log file: O(n)
-            Building HashMaps: O(n)
-            Sorting for top 3: O(m log m) where m = unique IPs/URLs (typically m << n)
-            Bottleneck: The two .sorted() operations on HashMap entries
+            Overall: O(n + m log n) which simplifies to O(n + m)
+            - where n = number of log records, m = number of unique IPs or URLs
+            - Building HashMaps: O(n) — single pass through all records
+            - topN (x2): O(m log n) where n=3, so effectively O(m)
+            - Overall simplifies to O(n + m), since m ≤ n this is O(n)
         Space Complexity
-            O(m) where m = number of unique IPs + unique URLs
-            Two HashMaps store unique values
-            Acceptable for most datasets
-    
-    
+            - HashMaps: O(m) where m = unique IPs + unique URLs
+            - Heap inside topN: O(n) where n=3, i.e. O(1) constant space
+            - Input list: O(n) — held in memory by caller, not allocated here
+            - Overall: O(m) additional space allocated in this method
+        Notes:
+            - topN result order is descending by count. Ties are broken by heap insertion/eviction
+              order which depends on HashMap iteration order — non-deterministic for equal counts.
+            - m ≤ n always, but in practice m << n for typical log files (many repeated IPs/URLs),
+              making both map-building and topN fast in practice.
     */
     private LogReportResponse calculateReportValues(List<LogRecordDto> logRecords) {
         HashMap<String, Integer> ipAddresses = new HashMap<>();
@@ -68,7 +74,7 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
 
         // Iterate through all the records
             // Maintain following data structures:
-            // ipAddresses: Map < String ipAddress , int count >
+            // ipAddresses: Map < String ipAddress , int count>
             // urls: Map < String url , int count >
         for (LogRecordDto logRecord : logRecords) {
             String ipAddress = logRecord.getIpAddress();
@@ -100,14 +106,6 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
      * @param n The number of top entries to return
      * @return A list of the top N keys from the input map, sorted in descending order of their corresponding integer values
      */
-    /*
-        Developer Notes
-        Time Complexity
-            O(m log n) where m = number of unique keys in the input map, n = number of top entries to return (in this case 3, so effectively O(m))
-        Space Complexity
-            O(n) for the heap storing the top entries, O(m) for the input map
-    
-    */
     private List<String> topN(Map<String, Integer> input, int n) {
         PriorityQueue<Map.Entry<String, Integer>> heap = new PriorityQueue<>(n, Map.Entry.comparingByValue());
 

@@ -8,7 +8,8 @@ It is intended as a sample design, and areas of future enhancement/assumptions a
 2. Users will query via a HTTP request
 3. Each request will allow consideration of a single file. In the future if files would be reused, caching could be implemented.
 4. Log files don't contain sensitive data and no masking is required
-
+5. When multiple records 'tie' for the same count (e.g. each appear only once), the default sort order is used
+6. The list of top values returned has no guaranteed order in the array response and is best-effort
 
 ## Methodology
 Key elements of the approach taken:
@@ -24,7 +25,7 @@ Key elements of the approach taken:
 AI tools were used to assist with the following:
 - Assisted in developing individual functions e.g. base regex for file parsing, which I then fixed up with regex101
 - Debugging individual functions e.g. OffsetDateTime conversion in log parsing
-- 
+- Providing commentary on time/space complexity and highlighting more efficient algorithms e.g. min heap
 
 
 ## Dependencies
