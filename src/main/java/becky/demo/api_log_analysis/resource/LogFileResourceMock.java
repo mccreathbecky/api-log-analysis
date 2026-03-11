@@ -18,9 +18,29 @@ import java.util.regex.Pattern;
 @Repository
 public class LogFileResourceMock implements LogFileResource {
 
+    private Pattern logFilePattern;
+
+    public LogFileResourceMock() {
+
+        // this is used in the log parser - it's more efficient to initialise it at construction
+        // Apache Common Log Format: IP logname user [timestamp] "METHOD path HTTP/version" status size "referrer" "user-agent"
+        this.logFilePattern = Pattern.compile(
+                "^(?<ipAddress>[\\d.]+) " +
+                    "(?<logname>[\\w.-]*) " +
+                    "(?<user>[\\w.-]*) " +
+                    "\\[(?<timestamp>[^]]*?)] " +
+                    "\"(?<httpMethod>\\w+) (?<urlPath>[^\\s]+)\\s+[^\"]*\" " +
+                    "(?<httpStatus>\\d{3}) " +
+                    "(?<responseSizeBytes>\\d+) " +
+                    "\"(?<referrer>[^\"]*)\" " +
+                    "\"(?<userAgent>[^\"]*)\""  // if there are extra characters after this, we don't care
+        );
+    }
+
     /**
-     * @param fileUrl
-     * @return
+     * Parse the provided file and return a list of LogRecordDto objects representing the parsed log data.
+     * @param fileUrl The absolute file path to the log file to parse
+     * @return A Mono containing a list of LogRecordDto objects representing the parsed log data
      */
     @Override
     public Mono<List<LogRecordDto>> parseLogFile(String fileUrl) {
@@ -30,6 +50,10 @@ public class LogFileResourceMock implements LogFileResource {
     }
 
 
+    /**
+     * Helper method to read a static file from the classpath and parse it into a list of LogRecordDto objects using the log pattern regex.
+     * @return A list of LogRecordDto objects representing the parsed log data from the static file
+     */
     private List<LogRecordDto> readStaticFile() {
         try {
             // Use Spring's ClassPathResource to load from classpath
@@ -61,21 +85,7 @@ public class LogFileResourceMock implements LogFileResource {
      */
     private LogRecordDto parseLogLine(String line) {
         try {
-
-            // Apache Common Log Format: IP - - [timestamp] "METHOD path HTTP/version" status size "-" "user-agent"
-            Pattern pattern = Pattern.compile(
-                    "^(?<ipAddress>[\\d.]+) " +
-                            "(?<logname>[\\w.-]*) " +
-                            "(?<user>[\\w.-]*) " +
-                            "\\[(?<timestamp>[^]]*?)] " +
-                            "\"(?<httpMethod>\\w+) (?<urlPath>[^\\s]+)\\s+[^\"]*\" " +
-                            "(?<httpStatus>\\d{3}) " +
-                            "(?<responseSizeBytes>\\d+) " +
-                            "\"(?<referrer>[^\"]*)\" " +
-                            "\"(?<userAgent>[^\"]*)\""  // if there are extra characters after this, we don't care
-            );
-
-            Matcher matcher = pattern.matcher(line);
+            Matcher matcher = logFilePattern.matcher(line);
             if (!matcher.find()) {
                 System.err.println("Failed to parse log line as valid log: " + line);
                 return null;
