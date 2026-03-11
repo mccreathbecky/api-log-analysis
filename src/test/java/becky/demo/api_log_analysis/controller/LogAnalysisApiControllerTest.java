@@ -22,7 +22,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 
 
@@ -115,6 +115,25 @@ class LogAnalysisApiControllerTest extends BaseTestClass {
                     assertEquals("File not found: /nonexistent/path/file.log", response.getErrorMessage(), "Expected error message to match");
                 });
     }
+
+    @Test
+    void getLogReport_onMissingQueryParam_expect400Response() {
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+//                        .queryParam("fileUrl", "/nonexistent/path/file.log")
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertEquals("BAD_REQUEST", response.getErrorCode(), "Expected BAD_REQUEST error code for missing file");
+                    assertEquals("400 BAD_REQUEST \"Required query parameter 'fileUrl' is not present.\"", response.getErrorMessage(), "Expected error message to match");
+                });
+    }
+
+
     @Test
     void getLogReport_onServiceError_expect500Response() throws Exception {
         Path logFile = tempDir.resolve("test.log");
@@ -164,6 +183,125 @@ class LogAnalysisApiControllerTest extends BaseTestClass {
                 .value(response -> {
                     assertEquals("NOT_FOUND", response.getErrorCode(), "Expected error code to match LogsError");
                     assertEquals("Something domain-specific went wrong", response.getErrorMessage(), "Expected error message to match LogsError");
+                });
+    }
+
+
+    @Test
+    void getLogReport_onServiceError_expectTrackingIdInResponse() throws Exception {
+        Path logFile = tempDir.resolve("test.log");
+        Files.writeString(logFile, "");
+        String trackingId = "test-tracking-id-123";
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.error(new RuntimeException("unexpected failure")));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString())
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .header("x-tracking-id", trackingId)
+                .exchange()
+                .expectStatus().isEqualTo(500)
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertEquals(trackingId, response.getTrackingId(), "Expected tracking ID from request header to be echoed in response");
+                });
+    }
+
+    @Test
+    void getLogReport_onServiceError_expectGeneratedTrackingIdWhenNoneProvided() throws Exception {
+        Path logFile = tempDir.resolve("test.log");
+        Files.writeString(logFile, "");
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.error(new RuntimeException("unexpected failure")));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString())
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                // no x-tracking-id header
+                .exchange()
+                .expectStatus().isEqualTo(500)
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertNotNull(response.getTrackingId(), "Expected a generated tracking ID when none was provided");
+                    assertFalse(response.getTrackingId().isBlank(), "Expected generated tracking ID to not be blank");
+                });
+    }
+
+    @Test
+    void getLogReport_onNullPointerException_expect500Response() throws Exception {
+        Path logFile = tempDir.resolve("test.log");
+        Files.writeString(logFile, "");
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.error(new NullPointerException()));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString())
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .exchange()
+                .expectStatus().isEqualTo(500)
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertEquals("INTERNAL_SERVER_ERROR", response.getErrorCode(), "Expected INTERNAL_SERVER_ERROR for NullPointerException");
+                    assertEquals("An unexpected error occurred. Please contact support if the issue persists.",
+                            response.getErrorMessage(), "Expected generic safe message for NullPointerException");
+                });
+    }
+
+    @Test
+    void getLogReport_onIllegalArgumentException_expect400Response() throws Exception {
+        Path logFile = tempDir.resolve("test.log");
+        Files.writeString(logFile, "");
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.error(new IllegalArgumentException("invalid argument supplied")));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString())
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertEquals("BAD_REQUEST", response.getErrorCode(), "Expected BAD_REQUEST for IllegalArgumentException");
+                    assertEquals("invalid argument supplied", response.getErrorMessage(), "Expected exception message to be propagated");
+                });
+    }
+
+    @Test
+    void getLogReport_onIllegalArgumentExceptionWithNullMessage_expectDefaultErrorMessage() throws Exception {
+        Path logFile = tempDir.resolve("test.log");
+        Files.writeString(logFile, "");
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.error(new IllegalArgumentException((String) null)));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString())
+                        .build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(ErrorResponse.class)
+                .value(response -> {
+                    assertEquals("Invalid request parameters.", response.getErrorMessage(),
+                            "Expected default message when IllegalArgumentException has null message");
                 });
     }
 }
