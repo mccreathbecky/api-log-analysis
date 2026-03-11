@@ -9,9 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class LogAnalysisServiceImpl implements LogAnalysisService {
@@ -83,19 +81,9 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
         // then calculate nbUniqueIpAddresses as size(ipAddresses)
         int nbUniqueIpAddresses = ipAddresses.size();
 
-        // then sort by count descending for ipAddresses, urls and take top 3
-        List<String> topThreeUrls = new ArrayList<>();
-        List<String> topThreeIpAddresses = new ArrayList<>();
-
-        ipAddresses.entrySet().stream()
-                .sorted((entry1, entry2) -> entry2.getValue().compareTo(entry1.getValue()))
-                .limit(3)
-                .forEach(entry -> topThreeIpAddresses.add(entry.getKey()));
-
-        urls.entrySet().stream()
-                .sorted((entry1, entry2) -> entry2.getValue().compareTo(entry1.getValue()))
-                .limit(3)
-                .forEach(entry -> topThreeUrls.add(entry.getKey()));
+        // then take top 3 by count descending for ipAddresses, urls
+        List<String> topThreeUrls = topN(urls, 3);
+        List<String> topThreeIpAddresses = topN(ipAddresses, 3);
 
         // Format into LogReportResponse
         return LogReportResponse.builder()
@@ -103,6 +91,35 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
                 .topThreeUrls(topThreeUrls)
                 .topThreeIPAddresses(topThreeIpAddresses)
                 .build();
+    }
+
+    /**
+     * A helper function to get the top N keys from a Map based on their integer values. 
+     * This function uses a min-heap (priority queue) to efficiently track the top N entries as it iterates through the map.
+     * @param input The input map from which to extract the top N keys based on their integer values
+     * @param n The number of top entries to return
+     * @return A list of the top N keys from the input map, sorted in descending order of their corresponding integer values
+     */
+    /*
+        Developer Notes
+        Time Complexity
+            O(m log n) where m = number of unique keys in the input map, n = number of top entries to return (in this case 3, so effectively O(m))
+        Space Complexity
+            O(n) for the heap storing the top entries, O(m) for the input map
+    
+    */
+    private List<String> topN(Map<String, Integer> input, int n) {
+        PriorityQueue<Map.Entry<String, Integer>> heap = new PriorityQueue<>(n, Map.Entry.comparingByValue());
+
+        for (Map.Entry<String, Integer> entry : input.entrySet()) {
+            heap.offer(entry);                  // Add entry to heap
+            if (heap.size() > n) heap.poll();   // Remove smallest if heap size exceeded
+        }
+
+        // Add all n items to the response (in descending order, as heap is smallest to largest)
+        List<String> result = new ArrayList<>(heap.size());
+        while (!heap.isEmpty()) result.addFirst(heap.poll().getKey());
+        return result;
     }
 
 

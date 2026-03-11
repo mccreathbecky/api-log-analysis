@@ -18,7 +18,8 @@ import java.util.regex.Pattern;
 @Repository
 public class LogFileResourceMock implements LogFileResource {
 
-    private Pattern logFilePattern;
+    private final Pattern logFilePattern;
+    private final DateTimeFormatter dateTimeFormatter;
 
     public LogFileResourceMock() {
 
@@ -35,12 +36,22 @@ public class LogFileResourceMock implements LogFileResource {
                     "\"(?<referrer>[^\"]*)\" " +
                     "\"(?<userAgent>[^\"]*)\""  // if there are extra characters after this, we don't care
         );
+
+        // Parse timestamp: "10/Jul/2018:22:21:28 +0200"
+        this.dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
     }
 
     /**
      * Parse the provided file and return a list of LogRecordDto objects representing the parsed log data.
      * @param fileUrl The absolute file path to the log file to parse
      * @return A Mono containing a list of LogRecordDto objects representing the parsed log data
+     */
+    /*
+        Developer Notes
+        Time Complexity
+            O(n*L) - n = lines in file, L = line length
+        Space Complexity
+            O(n)
      */
     @Override
     public Mono<List<LogRecordDto>> parseLogFile(String fileUrl) {
@@ -54,11 +65,19 @@ public class LogFileResourceMock implements LogFileResource {
      * Helper method to read a static file from the classpath and parse it into a list of LogRecordDto objects using the log pattern regex.
      * @return A list of LogRecordDto objects representing the parsed log data from the static file
      */
+    /*
+        Developer Notes
+        Time Complexity
+            O(n)
+        Space Complexity
+            O(n)
+     */
     private List<LogRecordDto> readStaticFile() {
+        BufferedReader reader = null;
         try {
             // Use Spring's ClassPathResource to load from classpath
             ClassPathResource resource = new ClassPathResource("samples/sample-data-1.log");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(resource.getInputStream()));
+            reader = new BufferedReader(new InputStreamReader(resource.getInputStream()));
             List<LogRecordDto> records = new ArrayList<>();
             String line;
 
@@ -74,6 +93,14 @@ public class LogFileResourceMock implements LogFileResource {
 
             return records;
         } catch (Exception e) {
+            // Try to close the reader in an error scenario
+            try {
+                if (reader != null && reader.ready()) {
+                    reader.close();
+                }
+            } catch (Exception throwaway) {
+                System.err.println("Error during exception handler attempting to close reader");
+            }
             throw new RuntimeException("Failed to read static file", e);
         }
     }
@@ -82,6 +109,13 @@ public class LogFileResourceMock implements LogFileResource {
      * Parse a string using a given regex pattern matcher for a specific log format
      * @param line The single line of input
      * @return A parsed LogRecordDto object containing all the fields, including the date extracted into DateTime format
+     */
+    /*
+        Developer Notes
+        Time Complexity
+            O(L), L = line length, regex match is linear in input size
+        Space Complexity
+            O(n)
      */
     private LogRecordDto parseLogLine(String line) {
         try {
@@ -104,8 +138,9 @@ public class LogFileResourceMock implements LogFileResource {
             String userAgent = matcher.group("userAgent");
 
             // Parse timestamp: "10/Jul/2018:22:21:28 +0200"
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
-            OffsetDateTime dateTime = OffsetDateTime.parse(timestamp, formatter);
+            OffsetDateTime dateTime = OffsetDateTime.parse(timestamp, dateTimeFormatter);
+            int httpStatusCode = (status.isBlank() || "-".equals(status)) ? -1: Integer.parseInt(status);
+            int responseSizeBytes = (size.isBlank() || "-".equals(size)) ? -1: Integer.parseInt(size);
 
             return LogRecordDto.builder()
                     .ipAddress(ipAddress)
@@ -113,8 +148,8 @@ public class LogFileResourceMock implements LogFileResource {
                     .user(user)
                     .timeStamp(dateTime)
                     .url(path)
-                    .httpStatus(Integer.parseInt(status))
-                    .responseSizeBytes(Integer.parseInt(size))
+                    .httpStatus(httpStatusCode)
+                    .responseSizeBytes(responseSizeBytes)
                     .referrerHeader(referrer)
                     .userAgent(userAgent)
                     .build();
