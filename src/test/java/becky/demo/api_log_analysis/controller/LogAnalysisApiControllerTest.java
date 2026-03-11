@@ -83,7 +83,6 @@ class LogAnalysisApiControllerTest extends BaseTestClass {
 
     @Test
     void getLogReport_onBlankFileUrl_expect400Response() {
-
         webTestClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/reports")
@@ -133,6 +132,28 @@ class LogAnalysisApiControllerTest extends BaseTestClass {
                 });
     }
 
+    @Test
+    void getLogReport_onEmptyLogReportResponse_expect200WithZeroValues() throws Exception {
+        Path logFile = tempDir.resolve("empty.log");
+        Files.writeString(logFile, "");
+
+        LogReportResponse emptyResponse = LogReportResponse.builder().build();
+
+        Mockito.when(logAnalysisService.getLogReport(any(Path.class)))
+                .thenReturn(Mono.just(emptyResponse));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/v1/reports")
+                        .queryParam("fileUrl", logFile.toAbsolutePath().toString()).build())
+                .header("x-api-key", "DUMMY_VALUE")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(LogReportResponse.class)
+                .value(response -> {
+                    assertEquals(null, response.getNbUniqueIpAddresses());
+                    assertTrue(response.getTopThreeIPAddresses().isEmpty());
+                });
+    }
 
     @Test
     void getLogReport_onServiceError_expect500Response() throws Exception {

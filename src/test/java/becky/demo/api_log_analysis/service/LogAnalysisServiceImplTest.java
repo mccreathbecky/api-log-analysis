@@ -172,4 +172,22 @@ class LogAnalysisServiceImplTest extends BaseTestClass {
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus(), "Expected BAD_REQUEST status");
         Mockito.verify(logFileResource, Mockito.times(0)).parseLogFile(any(Path.class));
     }
+
+    @Test
+    void getLogReport_onNullIPAddress_expectHandlesGracefully() {
+        List<LogRecordDto> records = List.of(
+                LogRecordDto.builder().ipAddress(null).url("/home").build(),
+                LogRecordDto.builder().ipAddress("192.168.1.1").url("/home").build()
+        );
+        when(logFileResource.parseLogFile(any(Path.class)))
+                .thenReturn(Mono.just(records));
+
+        StepVerifier.create(logAnalysisService.getLogReport(Path.of("/some/file.log")))
+                .thenConsumeWhile(response -> {
+                    // Should handle null gracefully (count as 1 unique IP)
+                    assertEquals(2, response.getNbUniqueIpAddresses(), "Expected 2 unique IP address for log file");
+                    return true;
+                })
+                .verifyComplete();
+    }
 }
