@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @Service
@@ -24,8 +26,7 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
      */
     @Override
     public Mono<LogReportResponse> getLogReport(String fileUrl) {
-        // Logic Steps:
-        // Step 1: (Additional) Validate fileUrl again - theoretically not necessary if done in controller but public method could be called elsewhere in future
+        // Validate fileUrl again - theoretically not necessary if done in controller but public method could be called elsewhere in future
         if (fileUrl.isBlank()) {
             throw LogsError.builder()
                     .message("Error: fileUrl is an expected parameter")
@@ -36,26 +37,65 @@ public class LogAnalysisServiceImpl implements LogAnalysisService {
 
         // Call Resource layer to read + parse log data
         return logFileResource.parseLogFile(fileUrl)
-                // Either separate methods or together for efficiency, iterate through log data to generate report data
+                // Iterate through log data to generate report data, formatting into expected response
                 .map(this::calculateReportValues)
-                // TODO: remove once implemented
-                .then(Mono.just(LogReportResponse.builder()
-                        .nbUniqueIpAddresses(3)
-                        .topThreeUrls(List.of("https://abc.com"))
-                        .topThreeIPAddresses(List.of("192.156.1.0"))
-                        .build()))
                 // Handle errors gracefully
                 .doOnError(this::handleError);
     }
 
+    /**
+     * Helper method to calculate report values from the list of log records. 
+     * This method iterates through the log records to count unique IP addresses and URLs, then determines the top 3 most frequent IP addresses and URLs.
+     * @param logRecords - A list of LogRecordDto objects representing the parsed log data
+     * @return A LogReportResponse object containing the calculated report values such as number of unique IP addresses, top 3 URLs, and top 3 IP addresses
+     */
+    /*
+        Developer Notes:
+        Time Complexity
+            Overall: O(n log n) where n = number of log records, but typically better as m (unique IPs/URLs) is often much smaller than n
+            Parsing log file: O(n)
+            Building HashMaps: O(n)
+            Sorting for top 3: O(m log m) where m = unique IPs/URLs (typically m << n)
+            Bottleneck: The two .sorted() operations on HashMap entries
+        Space Complexity
+            O(m) where m = number of unique IPs + unique URLs
+            Two HashMaps store unique values
+            Acceptable for most datasets
+    
+    
+    */
     private LogReportResponse calculateReportValues(List<LogRecordDto> logRecords) {
+        HashMap<String, Integer> ipAddresses = new HashMap<>();
+        HashMap<String, Integer> urls = new HashMap<>();
 
-        int nbUniqueIpAddresses = 0;
-        List<String> topThreeUrls = List.of();
-        List<String> topThreeIpAddresses = List.of();
+        // Iterate through all the records
+            // Maintain following data structures:
+            // ipAddresses: Map < String ipAddress , int count >
+            // urls: Map < String url , int count >
+        for (LogRecordDto logRecord : logRecords) {
+            String ipAddress = logRecord.getIpAddress();
+            String url = logRecord.getUrl();    
+            
+            ipAddresses.put(ipAddress, ipAddresses.getOrDefault(ipAddress, 0) + 1);
+            urls.put(url, urls.getOrDefault(url, 0) + 1);
+        }
 
-        
+        // then calculate nbUniqueIpAddresses as size(ipAddresses)
+        int nbUniqueIpAddresses = ipAddresses.size();
 
+        // then sort by count descending for ipAddresses, urls and take top 3
+        List<String> topThreeUrls = new ArrayList<>();
+        List<String> topThreeIpAddresses = new ArrayList<>();
+
+        ipAddresses.entrySet().stream()
+                .sorted((entry1, entry2) -> entry2.getValue().compareTo(entry1.getValue()))
+                .limit(3)
+                .forEach(entry -> topThreeIpAddresses.add(entry.getKey()));
+
+        urls.entrySet().stream()
+                .sorted((entry1, entry2) -> entry2.getValue().compareTo(entry1.getValue()))
+                .limit(3)
+                .forEach(entry -> topThreeUrls.add(entry.getKey()));
 
         // Format into LogReportResponse
         return LogReportResponse.builder()
