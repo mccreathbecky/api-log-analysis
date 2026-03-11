@@ -1,9 +1,10 @@
 package becky.demo.api_log_analysis.resource;
 
+import becky.demo.api_log_analysis.BaseTestClass;
 import becky.demo.api_log_analysis.model.LogsError;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import reactor.test.StepVerifier;
 
@@ -14,17 +15,14 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-class LogFileResourceImplTest {
+
+class LogFileResourceImplTest extends BaseTestClass {
 
     @TempDir
     private Path tempDir;
 
-    private static LogFileResource resource;
-
-    @BeforeAll
-    static void setUp() {
-        resource = new LogFileResourceImpl();
-    }
+    @Autowired
+    private LogFileResource resource;
 
     @Test
     void parseLogFile_onValidFile_expectParsesAllLines() throws Exception {
