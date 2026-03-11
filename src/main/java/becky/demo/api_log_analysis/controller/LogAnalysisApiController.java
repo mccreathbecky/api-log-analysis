@@ -1,10 +1,13 @@
 package becky.demo.api_log_analysis.controller;
 
+import becky.demo.api_log_analysis.model.LogsError;
 import becky.demo.api_log_analysis.service.LogAnalysisService;
 import becky.demo.contract_api_log_analysis.interfaces.LogAnalysisApi;
+import becky.demo.contract_api_log_analysis.models.ErrorResponse;
 import becky.demo.contract_api_log_analysis.models.LogReportResponse;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
@@ -19,18 +22,38 @@ public class LogAnalysisApiController implements LogAnalysisApi {
     @Override
     public Mono<ResponseEntity<LogReportResponse>> getLogReport(String fileUrl, String logPatternLayout, @Nullable String xTrackingId, ServerWebExchange exchange) {
 
-        // TODO: Implement Logic
+        // Validate fileUrl and logPatternLayout
+        if (fileUrl.isBlank()) {
+            throw new RuntimeException("Error: fileUrl is an expected parameter");
+        }
+        if (logPatternLayout.isBlank()) {
+            throw new RuntimeException("Error: logPatternLayout is an expected parameter");
+        }
 
-        // Step 1: Validate fileUrl and logPatternLayout
+        // TODO: ? Convert logPatternLayout to a Pattern?
 
-        // Step 2: ? Convert logPatternLayout to a Pattern?
-
-        // Step 3: Call Service
-
-        // Step 4: Format into 200 OK response
-
-        // Also, handle errors
+        // Call Service
         return logAnalysisService.getLogReport(fileUrl, logPatternLayout)
-                .map(ResponseEntity::ok);
+                // Format into 200 OK response
+                .map(ResponseEntity::ok)
+                // Handle any errors to return in expected format
+                .doOnError(this::handleError);
+
+    }
+
+    private Mono<ResponseEntity<ErrorResponse>> handleError(Throwable throwable) {
+        if (throwable instanceof LogsError logsError) {
+            ErrorResponse errorResponse = ErrorResponse.builder()
+                    .errorCode(logsError.getErrorCode())
+                    .errorMessage(logsError.getMessage())
+                    .build();
+            return Mono.just(ResponseEntity.status(logsError.getHttpStatus()).body(errorResponse));
+        } else {
+            ErrorResponse errorResponse = ErrorResponse.builder()
+                    .errorCode("Internal Server Error")
+                    .errorMessage("An unexpected error occurred: " + throwable.getMessage())
+                    .build();
+            return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse));
+        }
     }
 }
