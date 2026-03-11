@@ -5,5 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface LogAnalysisService {
 
-    Mono<LogReportResponse> getLogReport(String fileUrl, String logPatternLayout);
+    Mono<LogReportResponse> getLogReport(String fileUrl);
 }

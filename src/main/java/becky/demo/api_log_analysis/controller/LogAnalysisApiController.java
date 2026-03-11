@@ -20,20 +20,19 @@ public class LogAnalysisApiController implements LogAnalysisApi {
     private LogAnalysisService logAnalysisService;
 
     @Override
-    public Mono<ResponseEntity<LogReportResponse>> getLogReport(String fileUrl, String logPatternLayout, @Nullable String xTrackingId, ServerWebExchange exchange) {
+    public Mono<ResponseEntity<LogReportResponse>> getLogReport(String fileUrl, @Nullable String xTrackingId, ServerWebExchange exchange) {
 
         // Validate fileUrl and logPatternLayout
         if (fileUrl.isBlank()) {
-            throw new RuntimeException("Error: fileUrl is an expected parameter");
+            throw LogsError.builder()
+                    .message("Error: fileUrl is an expected parameter")
+                    .errorCode("BAD_REQUEST")
+                    .httpStatus(HttpStatus.BAD_REQUEST)
+                    .build();
         }
-        if (logPatternLayout.isBlank()) {
-            throw new RuntimeException("Error: logPatternLayout is an expected parameter");
-        }
-
-        // TODO: ? Convert logPatternLayout to a Pattern?
 
         // Call Service
-        return logAnalysisService.getLogReport(fileUrl, logPatternLayout)
+        return logAnalysisService.getLogReport(fileUrl)
                 // Format into 200 OK response
                 .map(ResponseEntity::ok)
                 // Handle any errors to return in expected format
