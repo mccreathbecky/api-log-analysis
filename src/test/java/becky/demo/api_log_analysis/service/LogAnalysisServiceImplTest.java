@@ -138,6 +138,26 @@ class LogAnalysisServiceImplTest extends BaseTestClass {
     }
 
     @Test
+    void getLogReport_onLogsError_expectLogsErrorRethrows() {
+        when(logFileResource.parseLogFile(any(Path.class)))
+                .thenReturn(Mono.error(new LogsError().builder()
+                        .message("Some downstream error")
+                        .errorCode("INTERNAL_SERVER_ERROR")
+                        .httpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .build()));
+
+        StepVerifier.create(logAnalysisService.getLogReport(Path.of("/some/file.log")))
+                .consumeErrorWith(throwable -> {
+                    assertInstanceOf(LogsError.class, throwable, "Expected LogsError wrapping the resource exception");
+                    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ((LogsError) throwable).getHttpStatus(), "Expected INTERNAL_SERVER_ERROR status");
+                    assertEquals("Some downstream error", throwable.getMessage(), "Expected error to match");
+                })
+                .verify();
+
+        Mockito.verify(logFileResource, Mockito.times(1)).parseLogFile(any(Path.class));
+    }
+
+    @Test
     void getLogReport_onNullPath_expectLogsErrorWithInternalServerError() {
         when(logFileResource.parseLogFile(nullable(Path.class)))
                 .thenReturn(Mono.just(List.of()));
