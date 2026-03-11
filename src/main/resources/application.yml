@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-log-analysis
+  webflux:
+    base-path: /${spring.application.name}
+
+# Management Endpoints Config
+management:
+  endpoint:
+    beans:
+      enabled: true
+    health:
+      timelimiter:
+        enabled: true
+      show-details: always
+  endpoints:
+    web:
+      base-path: /manage
+      exposure:
+        include: 'health,loggers'
