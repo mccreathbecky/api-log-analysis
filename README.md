@@ -10,6 +10,7 @@ It is intended as a sample design, and areas of future enhancement/assumptions a
 4. Log files don't contain sensitive data and no masking is required
 5. When multiple records 'tie' for the same count (e.g. each appear only once), the default sort order is used
 6. The list of top values returned has no guaranteed order in the array response and is best-effort
+7. Any additional custom characters expected in individual log components will be provided (e.g. where only decimals or alphabetical characters are considered)
 
 ## Methodology
 Key elements of the approach taken:
@@ -18,7 +19,8 @@ Key elements of the approach taken:
 - Use a controller/service/resource setup with the business logic in the service layer
 - Interface/Implementation patterns to enable multiple implementations to be developed in future enhancements / toggle between mock implementations
 - DTO models of downstream data to avoid exposing downstream data structure to upstream
-- Unit tests by layer to verify positive and negative cases for each
+- Unit tests by layer to verify positive and negative cases for each. Try to cover all branches where practical and achieve at least 80% coverage
+- Error handlers at each layer to try and prevent throwing system errors up to the user where not necessary
 
 
 ## AI Usage
@@ -26,7 +28,7 @@ AI tools were used to assist with the following:
 - Assisted in developing individual functions e.g. base regex for file parsing, which I then fixed up with regex101
 - Debugging individual functions e.g. OffsetDateTime conversion in log parsing
 - Providing commentary on time/space complexity and highlighting more efficient algorithms e.g. min heap
-
+- Generating additional unit tests following a provided template
 
 ## Dependencies
 - Java 21
